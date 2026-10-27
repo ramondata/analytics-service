@@ -1,0 +1,103 @@
+name: Analytics Service CI
+
+on:
+  workflow_dispatch:
+
+  pull_request:
+
+  push:
+    branches:
+      - aws-cloud-k8s
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: Analytics Service CI
+
+    uses: ramondata/CI-reusable-source/.github/workflows/ci-python-reusable.yml@1fa326046bf77ca7ff4431a065b0feba8e938a74
+
+    permissions:
+      contents: read
+
+    secrets:
+      AWS_ACADEMY_CREDENTIALS: ${{ secrets.AWS_ACADEMY_CREDENTIALS }}
+
+    with:
+      aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+      aws-auth-mode: academy
+      tests-required: false
+      ecr-repository: ${{ vars.ECR_REPOSITORY || 'toggle-master/analytics-service' }}
+      image-name: "analytics-service"
+      app-version: ${{ vars.APP_VERSION || 'v1.0.0' }}
+
+
+  gitops-update:
+    name: Update GitOps Image
+
+    needs:
+      - ci
+
+    if: >
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      github.ref == 'refs/heads/aws-cloud-k8s'
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout GitOps repository
+        uses: actions/checkout@v6
+        with:
+          repository: ramondata/toggle-master-gitops
+          ref: master
+          ssh-key: ${{ secrets.GITOPS_DEPLOY_KEY }}
+          path: gitops
+          fetch-depth: 0
+
+      - name: Update analytics-service image repository and tag
+        env:
+          IMAGE_TAG: ${{ needs.ci.outputs.image-tag }}
+          IMAGE_URI: ${{ needs.ci.outputs.image-uri }}
+        run: |
+          cd gitops
+
+          : "${IMAGE_URI:?CI did not return the published ECR image URI}"
+          : "${IMAGE_TAG:?CI did not return the published image tag}"
+          IMAGE_REPOSITORY="${IMAGE_URI%:*}"
+
+          sed -i -E \
+            -e "s|^  repository:.*|  repository: ${IMAGE_REPOSITORY}|" \
+            -e "s|^  tag:.*|  tag: ${IMAGE_TAG}|" \
+            apps/analytics-service/values.yaml
+
+          echo "New image tag:"
+          grep -A2 "^image:" apps/analytics-service/values.yaml
+
+      - name: Commit GitOps change
+        env:
+          IMAGE_TAG: ${{ needs.ci.outputs.image-tag }}
+        run: |
+          cd gitops
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add apps/analytics-service/values.yaml
+
+          if git diff --cached --quiet; then
+            echo "No GitOps changes detected"
+            exit 0
+          fi
+
+          git commit -m "chore(analytics-service): deploy ${IMAGE_TAG}"
+          for attempt in 1 2 3; do
+            git pull --rebase origin master
+            if git push origin HEAD:master; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::Could not update GitOps after three push attempts."
+              exit 1
+            fi
+          done
