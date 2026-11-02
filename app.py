@@ -11,6 +11,7 @@ from botocore.exceptions import ClientError, NoCredentialsError
 from dotenv import load_dotenv
 from flask import Flask, jsonify
 from opentelemetry import propagate, trace
+
 from telemetry import configure
 
 # Configura o logging
