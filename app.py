@@ -34,6 +34,7 @@ if not all([AWS_REGION, SQS_QUEUE_URL, DYNAMODB_TABLE_NAME]):
 app = Flask(__name__)
 from telemetry import configure  # noqa: E402
 from opentelemetry import trace, propagate  # noqa: E402
+
 configure(app, "analytics-service")
 
 # --- Clientes Boto3 ---
@@ -55,11 +56,19 @@ except Exception:
 
 
 def process_message(message):
-    carrier = {k: v.get("StringValue", "") for k, v in message.get("MessageAttributes", {}).items()}
+    carrier = {
+        k: v.get("StringValue", "")
+        for k, v in message.get("MessageAttributes", {}).items()
+    }
     parent = propagate.extract(carrier)
     with trace.get_tracer("togglemaster").start_as_current_span(
-        "feature-evaluation-events process", context=parent, kind=trace.SpanKind.CONSUMER,
-        attributes={"messaging.system": "aws_sqs", "messaging.destination.name": "feature-evaluation-events"}
+        "feature-evaluation-events process",
+        context=parent,
+        kind=trace.SpanKind.CONSUMER,
+        attributes={
+            "messaging.system": "aws_sqs",
+            "messaging.destination.name": "feature-evaluation-events",
+        },
     ):
         _process_message(message)
 
@@ -139,8 +148,6 @@ def sqs_worker_loop():
 # --- Servidor Flask (Apenas para Health Check) ---
 
 
-
-
 @app.route("/health")
 def health():
     # Uma verificação de saúde real poderia checar a conexão com o DynamoDB/SQS
@@ -163,4 +170,3 @@ start_worker()
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "8005"))
     app.run(host="0.0.0.0", port=port, debug=False)
-
