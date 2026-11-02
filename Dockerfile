@@ -44,7 +44,7 @@ RUN groupadd -r appgroup && \
 COPY --from=builder /install /usr/local
 
 # Código da aplicação
-COPY app.py .
+COPY app.py telemetry.py .
 
 # Ajusta permissões
 RUN chown -R appuser:appgroup /app
@@ -58,7 +58,7 @@ CMD python -c "import requests; requests.get('http://localhost:8005/health', tim
 
 CMD ["gunicorn", \
      "--bind", "0.0.0.0:8005", \
-     "--workers", "2", \
+     "--workers", "1", \
      "--threads", "4", \
      "--timeout", "30", \
      "app:app"]
