@@ -10,6 +10,8 @@ import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
 from dotenv import load_dotenv
 from flask import Flask, jsonify
+from opentelemetry import propagate, trace
+from telemetry import configure
 
 # Configura o logging
 logging.basicConfig(
@@ -32,8 +34,6 @@ if not all([AWS_REGION, SQS_QUEUE_URL, DYNAMODB_TABLE_NAME]):
     sys.exit(1)
 
 app = Flask(__name__)
-from telemetry import configure  # noqa: E402
-from opentelemetry import trace, propagate  # noqa: E402
 
 configure(app, "analytics-service")
 
