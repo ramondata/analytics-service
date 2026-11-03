@@ -42,8 +42,10 @@ configure(app, "analytics-service")
 # Criamos a sessão uma vez
 try:
     session = boto3.Session(region_name=AWS_REGION)
-    sqs_client = session.client("sqs")
-    dynamodb_client = session.client("dynamodb")
+    # Optional local emulator endpoint; unset preserves the AWS default.
+    endpoint = os.getenv("AWS_ENDPOINT_URL") or None
+    sqs_client = session.client("sqs", endpoint_url=endpoint)
+    dynamodb_client = session.client("dynamodb", endpoint_url=endpoint)
     log.info(f"Clientes Boto3 inicializados na região {AWS_REGION}")
 except NoCredentialsError:
     log.critical("Credenciais da AWS não encontradas. Verifique seu ambiente.")
